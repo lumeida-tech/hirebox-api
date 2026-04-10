@@ -1,0 +1,15 @@
+litestar[standard]
+pydantic
+pydantic-settings
+pydantic[email]
+python-dotenv
+gunicorn
+uvicorn[standard]
+asyncpg
+psycopg2-binary
+
+# Testing
+pytest
+pytest-asyncio
+anyio
+httpx
