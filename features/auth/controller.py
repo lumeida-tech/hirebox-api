@@ -1,20 +1,21 @@
 from litestar import Controller, post
 from litestar.di import Provide
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from features.auth.schemas import RegisterRequest, LoginRequest, TokenResponse, UserResponse
 from features.auth.service import AuthService
 
 
-def provide_auth_service() -> AuthService:
-    return AuthService()
+async def provide_auth_service(db_session: AsyncSession) -> AuthService:
+    return AuthService(db_session)
 
 
 class AuthController(Controller):
     path = "/auth"
     tags = ["Auth"]
-    dependencies = {"auth_service": Provide(provide_auth_service, sync_to_thread=False)}
+    dependencies = {"auth_service": Provide(provide_auth_service)}
 
-    @post("/register")
+    @post("/register", status_code=201)
     async def register(self, data: RegisterRequest, auth_service: AuthService) -> UserResponse:
         return await auth_service.register(data)
 

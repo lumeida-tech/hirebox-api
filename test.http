@@ -1,0 +1,20 @@
+### Register
+POST http://localhost:8000/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@hirebox.com",
+  "password": "secret123",
+  "full_name": "Test User"
+}
+
+###
+
+### Login
+POST http://localhost:8000/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@hirebox.com",
+  "password": "secret123"
+}
