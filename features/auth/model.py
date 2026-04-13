@@ -14,9 +14,10 @@ class User(Base):
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
-    full_name: Mapped[str] = mapped_column(String, nullable=False)
+    company_name: Mapped[str] = mapped_column(String, nullable=False)
+    website: Mapped[str] = mapped_column(String, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False, default="candidate")
+    role: Mapped[str] = mapped_column(String, nullable=False, default="recruiter")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

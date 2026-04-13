@@ -7,6 +7,10 @@ gunicorn
 uvicorn[standard]
 asyncpg
 psycopg2-binary
+sqlalchemy[asyncio]
+PyJWT
+passlib[bcrypt]
+bcrypt==4.0.1
 
 # Testing
 pytest

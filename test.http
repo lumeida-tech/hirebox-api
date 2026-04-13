@@ -3,9 +3,10 @@ POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-  "email": "test@hirebox.com",
-  "password": "secret123",
-  "full_name": "Test User"
+  "company_name": "HireBox Corp",
+  "website": "https://hirebox.com",
+  "email": "contact@hirebox.com",
+  "password": "Secure@2024!"
 }
 
 ###
@@ -15,6 +16,29 @@ POST http://localhost:8000/auth/login
 Content-Type: application/json
 
 {
-  "email": "test@hirebox.com",
-  "password": "secret123"
+  "email": "contact@hirebox.com",
+  "password": "Secure@2024!"
+}
+
+###
+
+### Refresh token
+POST http://localhost:8000/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "COLLE_LE_REFRESH_TOKEN_ICI"
+}
+
+###
+
+### Mot de passe trop faible (doit retourner 422)
+POST http://localhost:8000/auth/register
+Content-Type: application/json
+
+{
+  "company_name": "Test Corp",
+  "website": "https://test.com",
+  "email": "test@test.com",
+  "password": "motdepasse"
 }
