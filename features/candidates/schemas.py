@@ -21,3 +21,18 @@ class CandidateResponse(BaseModel):
     linkedin_url: str | None
     github_url: str | None
     portfolio_url: str | None
+
+
+class CVUploadResponse(BaseModel):
+    candidate_id: str
+    cv_url: str
+    preview: str | None = None
+    pages: int | None = None
+    size_bytes: int | None = None
+    ai_question: str | None = None
+
+
+class AuthorizationResponse(BaseModel):
+    candidate_id: str
+    authorized: bool
+    reason: str | None = None

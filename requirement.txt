@@ -17,3 +17,9 @@ pytest
 pytest-asyncio
 anyio
 httpx
+pdfplumber
+minio
+python-multipart
+pdfminer.six
+Pillow
+reportlab
