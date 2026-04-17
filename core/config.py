@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     JWT_ALGORITHM: str = "HS256"
 
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ROOT_USER: str = "hirebox"
+    MINIO_ROOT_PASSWORD: str = "hirebox123"
+    MINIO_BUCKET: str = "hirebox-cvs"
+    MINIO_SECURE: bool = False
+
     @model_validator(mode="after")
     def set_database_url(self) -> "Settings":
         if not self.DATABASE_URL:
@@ -31,6 +37,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

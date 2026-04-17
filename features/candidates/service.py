@@ -1,4 +1,3 @@
-from typing import Optional
 from datetime import datetime, timedelta, timezone
 import io
 
@@ -12,28 +11,8 @@ from features.candidates.exceptions import CandidateNotFoundError
 
 
 class CandidateService:
-    def __init__(self, minio_client: Optional[Minio] = None):
-        # Use injected client when provided, otherwise create one on demand
-        if minio_client is None:
-            self._minio = Minio(
-                endpoint=settings.MINIO_ENDPOINT,
-                access_key=settings.MINIO_ROOT_USER,
-                secret_key=settings.MINIO_ROOT_PASSWORD,
-                secure=settings.MINIO_SECURE,
-            )
-            try:
-                if not self._minio.bucket_exists(settings.MINIO_BUCKET):
-                    self._minio.make_bucket(settings.MINIO_BUCKET)
-            except Exception:
-                pass
-        else:
-            self._minio = minio_client
-            # S'assurer que le bucket existe même si le client est injecté (utile pour les tests d'intégration)
-            try:
-                if not self._minio.bucket_exists(settings.MINIO_BUCKET):
-                    self._minio.make_bucket(settings.MINIO_BUCKET)
-            except Exception:
-                pass
+    def __init__(self, minio_client: Minio):
+        self._minio = minio_client
 
     async def get_profile(self, candidate_id: str) -> CandidateResponse:
         raise NotImplementedError
