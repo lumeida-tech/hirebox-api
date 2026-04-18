@@ -28,6 +28,8 @@ class JobCreateRequest(BaseModel):
     @field_validator("closes_at")
     @classmethod
     def validate_closes_at(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
         if v <= datetime.now(timezone.utc):
             raise ValueError("La date de clôture doit être ultérieure à aujourd'hui")
         return v
@@ -44,7 +46,11 @@ class JobUpdateRequest(BaseModel):
     @field_validator("closes_at")
     @classmethod
     def validate_closes_at(cls, v: datetime | None) -> datetime | None:
-        if v and v <= datetime.now(timezone.utc):
+        if v is None:
+            return v
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v <= datetime.now(timezone.utc):
             raise ValueError("La date de clôture doit être ultérieure à aujourd'hui")
         return v
 
@@ -55,7 +61,11 @@ class JobPublishRequest(BaseModel):
     @field_validator("opens_at")
     @classmethod
     def validate_opens_at(cls, v: datetime | None) -> datetime | None:
-        if v and v <= datetime.now(timezone.utc):
+        if v is None:
+            return v
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v <= datetime.now(timezone.utc):
             raise ValueError("La date de démarrage doit être dans le futur")
         return v
 

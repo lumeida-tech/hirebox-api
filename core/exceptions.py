@@ -58,10 +58,15 @@ def validation_handler(_: Request, exc: ValidationError) -> Response:
     return Response(content={"error": str(exc)}, status_code=HTTPStatus.UNPROCESSABLE_ENTITY)
 
 
+def value_error_handler(_: Request, exc: ValueError) -> Response:
+    return Response(content={"error": str(exc)}, status_code=HTTPStatus.UNPROCESSABLE_ENTITY)
+
+
 EXCEPTION_HANDLERS: dict = {
     NotFoundError: not_found_handler,
     AlreadyExistsError: already_exists_handler,
     UnauthorizedError: unauthorized_handler,
     ForbiddenError: forbidden_handler,
     ValidationError: validation_handler,
+    ValueError: value_error_handler,
 }

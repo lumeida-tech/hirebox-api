@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class ApplicationStatus(StrEnum):
@@ -12,12 +12,6 @@ class ApplicationStatus(StrEnum):
     WITHDRAWN = "withdrawn"
 
 
-class ApplicationCreateRequest(BaseModel):
-    job_id: str
-    cover_letter: str | None = None
-    resume_url: str | None = None
-
-
 class ApplicationStatusUpdateRequest(BaseModel):
     status: ApplicationStatus
 
@@ -25,9 +19,13 @@ class ApplicationStatusUpdateRequest(BaseModel):
 class ApplicationResponse(BaseModel):
     id: str
     job_id: str
-    candidate_id: str
-    status: ApplicationStatus
-    cover_letter: str | None
+    nom: str
+    prenom: str
+    email: str
+    telephone: str
     resume_url: str | None
+    introduction_audio_url: str | None
+    question_on_resume_audio_url: str | None
+    status: ApplicationStatus
     applied_at: datetime
     updated_at: datetime
