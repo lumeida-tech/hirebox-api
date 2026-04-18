@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from pydantic import BaseModel, EmailStr, field_validator, HttpUrl
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class PasswordStrength(str, Enum):
@@ -14,7 +14,6 @@ def evaluate_password(password: str) -> PasswordStrength:
     has_digit = bool(re.search(r"\d", password))
     has_special = bool(re.search(r"[^a-zA-Z0-9]", password))
     length = len(password)
-
     score = sum([has_letter, has_digit, has_special])
 
     if length >= 14 and score == 3:
@@ -61,9 +60,25 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class RegisterResponse(BaseModel):
+    id: str
+    email: str
+    company_name: str
+    website: str
+    role: str
+    is_active: bool
+    password_strength: PasswordStrength
+    message: str
+
+
+class ActivateRequest(BaseModel):
+    token: str
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
     company_name: str
     website: str
     role: str
+    is_active: bool

@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     JWT_ALGORITHM: str = "HS256"
 
+    # Mail
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = ""
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_PORT: int = 587
+    MAIL_STARTTLS: bool = True
+    FRONTEND_URL: str = "http://localhost:8000"
+
+    # MinIO
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ROOT_USER: str = "hirebox"
     MINIO_ROOT_PASSWORD: str = "hirebox123"
@@ -37,7 +47,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra = "ignore"
 
 
 settings = Settings()

@@ -5,6 +5,7 @@ python -c "
 import asyncio
 from core.database import Base, engine
 from features.auth.model import User
+from features.jobs.model import Job
 
 async def migrate():
     async with engine.begin() as conn:

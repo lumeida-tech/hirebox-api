@@ -9,7 +9,9 @@ from litestar.openapi.spec import Components, SecurityScheme
 from core.database import get_async_session
 from core.exceptions import EXCEPTION_HANDLERS
 from features.auth.controller import AuthController
+from features.auth.model import User
 from features.jobs.controller import JobController
+from features.jobs.model import Job
 from features.applications.controller import ApplicationController
 from features.candidates.controller import CandidateController
 from features.companies.controller import CompanyController

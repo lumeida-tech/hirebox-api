@@ -1,4 +1,4 @@
-### Register
+### 1. Register (pas de token JWT, juste le token d'activation)
 POST http://localhost:8000/auth/register
 Content-Type: application/json
 
@@ -11,7 +11,7 @@ Content-Type: application/json
 
 ###
 
-### Login
+### 2. Login sans activation (doit retourner 401)
 POST http://localhost:8000/auth/login
 Content-Type: application/json
 
@@ -22,23 +22,21 @@ Content-Type: application/json
 
 ###
 
-### Refresh token
-POST http://localhost:8000/auth/refresh
+### 3. Activer le compte (colle le token du register)
+POST http://localhost:8000/auth/activate
 Content-Type: application/json
 
 {
-  "refresh_token": "COLLE_LE_REFRESH_TOKEN_ICI"
+  "token": "b31f1566-eb0a-45b1-816c-69f2d2bcaeb1"
 }
 
 ###
 
-### Mot de passe trop faible (doit retourner 422)
-POST http://localhost:8000/auth/register
+### 4. Login après activation (doit retourner les tokens JWT)
+POST http://localhost:8000/auth/login
 Content-Type: application/json
 
 {
-  "company_name": "Test Corp",
-  "website": "https://test.com",
-  "email": "test@test.com",
-  "password": "motdepasse"
+  "email": "contact@hirebox.com",
+  "password": "Secure@2024!"
 }
