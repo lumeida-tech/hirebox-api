@@ -26,5 +26,8 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "hirebox-cvs"
     MINIO_SECURE: bool = False
 
+    # NLP
+    SPACY_MODEL: str = "xx_ent_wiki_sm"
+
 
 settings = Settings()

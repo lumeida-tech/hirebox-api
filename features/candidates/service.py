@@ -1,39 +1,58 @@
-from typing import Optional
 from datetime import datetime, timedelta, timezone
 import io
+import re
+import uuid
+from typing import Any
 
 import pdfplumber
 from minio import Minio
 from litestar.datastructures import UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
+
+try:
+    import spacy
+except Exception:  # pragma: no cover - dépendance optionnelle en runtime
+    spacy = None
 
 from config.settings import settings
+from features.applications.model import PartialApplication
 from features.candidates.schemas import CandidateProfileRequest, CandidateResponse
 from features.candidates.exceptions import CandidateNotFoundError
 
 
 class CandidateService:
-    def __init__(self, minio_client: Optional[Minio] = None):
-        # Use injected client when provided, otherwise create one on demand
-        if minio_client is None:
-            self._minio = Minio(
-                endpoint=settings.MINIO_ENDPOINT,
-                access_key=settings.MINIO_ROOT_USER,
-                secret_key=settings.MINIO_ROOT_PASSWORD,
-                secure=settings.MINIO_SECURE,
-            )
-            try:
-                if not self._minio.bucket_exists(settings.MINIO_BUCKET):
-                    self._minio.make_bucket(settings.MINIO_BUCKET)
-            except Exception:
-                pass
-        else:
-            self._minio = minio_client
-            # S'assurer que le bucket existe même si le client est injecté (utile pour les tests d'intégration)
-            try:
-                if not self._minio.bucket_exists(settings.MINIO_BUCKET):
-                    self._minio.make_bucket(settings.MINIO_BUCKET)
-            except Exception:
-                pass
+    _SKILL_KEYWORDS: dict[str, str] = {
+        "python": "Python",
+        "javascript": "JavaScript",
+        "typescript": "TypeScript",
+        "docker": "Docker",
+        "kubernetes": "Kubernetes",
+        "aws": "AWS",
+        "azure": "Azure",
+        "gcp": "GCP",
+        "sql": "SQL",
+        "postgresql": "PostgreSQL",
+        "mysql": "MySQL",
+        "mongodb": "MongoDB",
+        "react": "React",
+        "vue": "Vue",
+        "angular": "Angular",
+        "django": "Django",
+        "fastapi": "FastAPI",
+        "flask": "Flask",
+        "git": "Git",
+        "linux": "Linux",
+    }
+
+    _SECTION_STOP_RE = re.compile(
+        r"^(summary|profil|profile|education|formation|projects?|projets?|certifications?|lang(?:u)?ages?|skills?|comp[eé]tences?|experience|exp[eé]riences?)\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, minio_client: Minio):
+        self._minio = minio_client
+        self._nlp: Any | None = None
+        self._spacy_load_attempted = False
 
     async def get_profile(self, candidate_id: str) -> CandidateResponse:
         raise NotImplementedError
@@ -113,6 +132,229 @@ class CandidateService:
         # Sinon question générique
         return "Parlez-nous de votre expérience la plus significative et des résultats obtenus."
 
+    def _get_spacy_nlp(self) -> Any | None:
+        """Charge spaCy en lazy-loading; retourne None en fallback silencieux."""
+        if self._spacy_load_attempted:
+            return self._nlp
+
+        self._spacy_load_attempted = True
+        if spacy is None:
+            return None
+
+        try:
+            self._nlp = spacy.load(settings.SPACY_MODEL)
+        except Exception:
+            self._nlp = None
+        return self._nlp
+
+    @staticmethod
+    def _clean_and_dedupe(items: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+
+        for item in items:
+            value = re.sub(r"\s+", " ", item).strip("\t\r\n -:;,.•")
+            if len(value) < 2:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(value)
+
+        return cleaned
+
+    def _extract_name_line(self, lines: list[str]) -> str:
+        """Trouve une ligne plausible de nom dans les premières lignes du CV."""
+        candidate_lines = lines[:6]
+        for line in candidate_lines:
+            lower = line.lower()
+            if "@" in line:
+                continue
+            if "http://" in lower or "https://" in lower or "www." in lower or "linkedin" in lower:
+                continue
+            if sum(char.isdigit() for char in line) >= 4:
+                continue
+            if not re.match(r"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$", line):
+                continue
+
+            words = [w for w in line.split() if w]
+            if 2 <= len(words) <= 5:
+                return " ".join(words)
+
+        return ""
+
+    def _extract_section_lines(self, lines: list[str], heading_re: re.Pattern[str]) -> list[str]:
+        section_lines: list[str] = []
+        capture = False
+
+        for line in lines:
+            if capture and self._SECTION_STOP_RE.match(line):
+                break
+
+            if capture:
+                section_lines.append(line)
+                continue
+
+            if heading_re.match(line):
+                capture = True
+
+        return section_lines
+
+    def _extract_skills(self, lines: list[str], raw_text: str) -> list[str]:
+        heading_re = re.compile(r"^(skills?|comp[eé]tences?)\b[:\s-]*$", re.IGNORECASE)
+        section_lines = self._extract_section_lines(lines, heading_re)
+
+        extracted: list[str] = []
+        for line in section_lines:
+            extracted.extend(re.split(r"[,;|/•\-]", line))
+
+        normalized: list[str] = []
+        for token in extracted:
+            cleaned = re.sub(r"\(.*?\)", "", token).strip()
+            key = cleaned.lower()
+            if key in self._SKILL_KEYWORDS:
+                normalized.append(self._SKILL_KEYWORDS[key])
+            elif 2 <= len(cleaned) <= 40:
+                normalized.append(cleaned)
+
+        if not normalized:
+            lower_text = raw_text.lower()
+            for keyword, display in self._SKILL_KEYWORDS.items():
+                if re.search(rf"\b{re.escape(keyword)}\b", lower_text):
+                    normalized.append(display)
+
+        return self._clean_and_dedupe(normalized)
+
+    def _extract_experiences(self, lines: list[str], raw_text: str) -> list[str]:
+        heading_re = re.compile(r"^(experience|experiences|exp[eé]riences?)\b[:\s-]*$", re.IGNORECASE)
+        section_lines = self._extract_section_lines(lines, heading_re)
+
+        experiences: list[str] = []
+        for line in section_lines:
+            if len(line) >= 20:
+                experiences.append(line)
+
+        if not experiences:
+            year_re = re.compile(r"\b(?:19|20)\d{2}(?:\s*[-/]\s*(?:19|20)?\d{2})?\b")
+            for line in lines:
+                if year_re.search(line):
+                    experiences.append(line)
+                if len(experiences) >= 5:
+                    break
+
+        if not experiences:
+            experiences = [segment.strip() for segment in raw_text.split("\n\n") if len(segment.strip()) > 30][:3]
+
+        return self._clean_and_dedupe(experiences[:5])
+
+    @staticmethod
+    def _extract_email(raw_text: str) -> str | None:
+        email_match = re.search(
+            r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+            raw_text,
+            flags=re.IGNORECASE,
+        )
+        if not email_match:
+            return None
+        return email_match.group(0).strip().lower()
+
+    @staticmethod
+    def _extract_phone(raw_text: str) -> str | None:
+        phone_pattern = re.compile(
+            r"(?:\+|00)?\d[\d\s()./-]{7,}\d",
+            flags=re.IGNORECASE,
+        )
+        for match in phone_pattern.finditer(raw_text):
+            candidate = match.group(0).strip()
+            digits = re.sub(r"\D", "", candidate)
+            if len(digits) < 8 or len(digits) > 15:
+                continue
+            return candidate
+        return None
+
+    def _extract_structured_fields(self, raw_text: str) -> dict[str, Any]:
+        """Extrait des champs structurés (heuristiques + enrichissement spaCy)."""
+        lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+        full_name = self._extract_name_line(lines)
+        skills = self._extract_skills(lines, raw_text)
+        experiences = self._extract_experiences(lines, raw_text)
+
+        nlp = self._get_spacy_nlp()
+        if nlp is not None:
+            try:
+                doc = nlp(raw_text[:20000])
+
+                if not full_name:
+                    person_entities = [
+                        ent.text.strip()
+                        for ent in doc.ents
+                        if ent.label_.upper() in {"PERSON", "PER"} and 2 <= len(ent.text.split()) <= 5
+                    ]
+                    if person_entities:
+                        full_name = person_entities[0]
+
+                if not experiences:
+                    sentence_candidates: list[str] = []
+                    for sent in doc.sents:
+                        sentence = sent.text.strip()
+                        if re.search(r"\b(?:19|20)\d{2}\b", sentence) and len(sentence) >= 20:
+                            sentence_candidates.append(sentence)
+                        if len(sentence_candidates) >= 5:
+                            break
+                    experiences = self._clean_and_dedupe(sentence_candidates)
+            except Exception:
+                # En cas d'erreur NLP, on conserve uniquement les heuristiques.
+                pass
+
+        first_name = ""
+        last_name = ""
+        if full_name:
+            name_parts = full_name.split()
+            first_name = name_parts[0]
+            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+        email = self._extract_email(raw_text)
+        telephone = self._extract_phone(raw_text)
+
+        return {
+            "full_name": full_name or None,
+            "first_name": first_name or None,
+            "last_name": last_name or None,
+            "email": email,
+            "telephone": telephone,
+            "skills": skills,
+            "experiences": experiences,
+        }
+
+    @staticmethod
+    def _build_dated_cv_object_path(candidate_id: str, current_time: datetime | None = None) -> str:
+        now = current_time or datetime.now(timezone.utc)
+        iso_week = now.isocalendar().week
+        return f"cvs/{now:%Y/%m}/W{iso_week:02d}/{now:%d}/{candidate_id}/cv.pdf"
+
+    async def _create_partial_application(
+        self,
+        db_session: AsyncSession,
+        job_id: str,
+        cv_obj: str,
+        structured_fields: dict[str, Any],
+    ) -> PartialApplication:
+        partial_application = PartialApplication(
+            id=str(uuid.uuid4()),
+            person_uid=uuid.uuid4().hex,
+            job_id=job_id,
+            nom=structured_fields.get("last_name"),
+            prenom=structured_fields.get("first_name"),
+            email=structured_fields.get("email"),
+            telephone=structured_fields.get("telephone"),
+            cv_obj=cv_obj,
+        )
+        db_session.add(partial_application)
+        await db_session.commit()
+        return partial_application
+
     async def check_authorization(self, candidate_id: str, job_id: str | None = None) -> dict:
         """Vérifie si la candidature du `candidate_id` est autorisée pour un `job_id` optionnel.
 
@@ -130,16 +372,22 @@ class CandidateService:
 
         return {"candidate_id": candidate_id, "authorized": True, "reason": None}
 
-    async def process_and_store_cv(self, upload_file: UploadFile, candidate_id: str) -> dict:
+    async def process_and_store_cv(
+        self,
+        upload_file: UploadFile,
+        candidate_id: str,
+        db_session: AsyncSession | None = None,
+    ) -> dict:
         """Valide, parse et stocke le PDF brut + texte parsé dans MinIO.
 
         Retourne les chemins/URLs des objets stockés.
         """
         await self._validate_pdf(upload_file)
         raw_text = await self._parse_pdf(upload_file)
+        structured_fields = self._extract_structured_fields(raw_text)
 
         bucket = settings.MINIO_BUCKET
-        pdf_obj = f"cvs/{candidate_id}/cv.pdf"
+        pdf_obj = self._build_dated_cv_object_path(candidate_id)
         # Préparer et uploader le PDF brut (seul l'objet PDF est stocké dans MinIO)
         file_obj = upload_file.file
         try:
@@ -155,15 +403,7 @@ class CandidateService:
         # put_object attend un file-like et la longueur
         self._minio.put_object(bucket, pdf_obj, file_obj, size)
 
-        # Le texte parsé n'est PAS stocké dans MinIO : il est envoyé directement
-        # au modèle/servicede traitement pour générer la question.
-        # (La team Data doit fournir l'intégration réelle.)
-        # Générer métadonnées locales
-        metadata = {
-            "candidate_id": candidate_id,
-            "parsed_at": datetime.now(timezone.utc).isoformat(),
-            "word_count": len(raw_text.split()),
-        }
+        # Le texte parsé n'est PAS stocké dans MinIO : il reste traité côté API.
         # Générer une question proposée par l'IA (placeholder)
         ai_question = self._generate_ai_question(raw_text)
         # Générer URL présignée pour le PDF (valable 24h)
@@ -172,6 +412,18 @@ class CandidateService:
         except Exception:
             cv_url = ""
 
+        partial_application_id = None
+        person_uid = None
+        if db_session is not None:
+            partial_application = await self._create_partial_application(
+                db_session=db_session,
+                job_id=candidate_id,
+                cv_obj=pdf_obj,
+                structured_fields=structured_fields,
+            )
+            partial_application_id = partial_application.id
+            person_uid = partial_application.person_uid
+
         return {
             "candidate_id": candidate_id,
             "cv_obj": pdf_obj,
@@ -179,5 +431,14 @@ class CandidateService:
             "preview": raw_text[:500],
             "pages": None,
             "size_bytes": size,
+            "full_name": structured_fields["full_name"],
+            "first_name": structured_fields["first_name"],
+            "last_name": structured_fields["last_name"],
+            "email": structured_fields["email"],
+            "telephone": structured_fields["telephone"],
+            "skills": structured_fields["skills"],
+            "experiences": structured_fields["experiences"],
+            "partial_application_id": partial_application_id,
+            "person_uid": person_uid,
             "ai_question": ai_question,
         }

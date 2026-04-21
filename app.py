@@ -1,23 +1,29 @@
 from http import HTTPStatus
 
 from litestar import Litestar, get, Response
+from litestar.response import Redirect
 from litestar.di import Provide
+from litestar.logging import LoggingConfig
+from litestar.middleware.logging import LoggingMiddlewareConfig
 from litestar.openapi import OpenAPIConfig
 from litestar.openapi.plugins import ScalarRenderPlugin
+from litestar.openapi.spec import Components, SecurityScheme
 
-from core.database import Base, engine, get_async_session
+from core.database import get_async_session
 from core.exceptions import EXCEPTION_HANDLERS
 from features.auth.controller import AuthController
-from features.auth.model import User  # enregistre le model dans Base
+from features.auth.model import User
 from features.jobs.controller import JobController
+from features.jobs.model import Job
+from features.applications.model import Application, PartialApplication
 from features.applications.controller import ApplicationController
 from features.candidates.controller import CandidateController
 from features.companies.controller import CompanyController
 
 
-async def create_tables() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+@get("/", include_in_schema=False)
+async def root() -> Redirect:
+    return Redirect(path="/docs")
 
 
 @get("/health", tags=["Health"])
@@ -28,9 +34,23 @@ async def health_check() -> Response:
     )
 
 
+logging_config = LoggingConfig(
+    root={"level": "INFO", "handlers": ["console"]},
+    formatters={"standard": {"format": "%(asctime)s %(levelname)s %(message)s"}},
+    log_exceptions="always",
+)
+
+logging_middleware = LoggingMiddlewareConfig(
+    request_log_fields=["method", "path", "status_code"],
+)
+
 app = Litestar(
-    on_startup=[create_tables],
+    middleware=[logging_middleware.middleware],
+    logging_config=logging_config,
+    request_max_body_size=2 * 1024 * 1024,  # 2 MB
+
     route_handlers=[
+        root,
         health_check,
         AuthController,
         JobController,
@@ -45,5 +65,15 @@ app = Litestar(
         version="1.0.0",
         path="/docs",
         render_plugins=[ScalarRenderPlugin()],
+        components=Components(
+            security_schemes={
+                "BearerAuth": SecurityScheme(
+                    type="http",
+                    scheme="bearer",
+                    bearer_format="JWT",
+                )
+            }
+        ),
+        security=[{"BearerAuth": []}],
     ),
 )

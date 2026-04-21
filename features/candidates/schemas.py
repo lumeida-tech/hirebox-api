@@ -1,9 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CandidateProfileRequest(BaseModel):
     bio: str | None = None
-    skills: list[str] = []
+    skills: list[str] = Field(default_factory=list)
     years_of_experience: int | None = None
     linkedin_url: str | None = None
     github_url: str | None = None
@@ -29,6 +29,15 @@ class CVUploadResponse(BaseModel):
     preview: str | None = None
     pages: int | None = None
     size_bytes: int | None = None
+    full_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    telephone: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    experiences: list[str] = Field(default_factory=list)
+    partial_application_id: str | None = None
+    person_uid: str | None = None
     ai_question: str | None = None
 
 

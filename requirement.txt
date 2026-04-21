@@ -23,3 +23,6 @@ python-multipart
 pdfminer.six
 Pillow
 reportlab
+fastapi-mail
+aiosmtplib
+spacy

@@ -31,3 +31,16 @@ class ApplicationResponse(BaseModel):
     resume_url: str | None
     applied_at: datetime
     updated_at: datetime
+
+
+class PartialApplicationResponse(BaseModel):
+    id: str
+    person_uid: str
+    job_id: str
+    nom: str | None
+    prenom: str | None
+    email: str | None
+    telephone: str | None
+    cv_obj: str | None
+    created_at: datetime
+    updated_at: datetime
