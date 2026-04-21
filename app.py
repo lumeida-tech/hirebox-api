@@ -2,6 +2,7 @@ from http import HTTPStatus
 
 from litestar import Litestar, get, Response
 from litestar.response import Redirect
+from litestar.config.cors import CORSConfig
 from litestar.di import Provide
 from litestar.logging import LoggingConfig
 from litestar.middleware.logging import LoggingMiddlewareConfig
@@ -44,7 +45,15 @@ logging_middleware = LoggingMiddlewareConfig(
     request_log_fields=["method", "path", "status_code"],
 )
 
+cors_config = CORSConfig(
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
 app = Litestar(
+    cors_config=cors_config,
     middleware=[logging_middleware.middleware],
     logging_config=logging_config,
     request_max_body_size=2 * 1024 * 1024,  # 2 MB
