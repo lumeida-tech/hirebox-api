@@ -1,5 +1,6 @@
 from http import HTTPStatus
 from litestar import Request, Response
+from litestar.exceptions import ValidationException
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +63,25 @@ def value_error_handler(_: Request, exc: ValueError) -> Response:
     return Response(content={"error": str(exc)}, status_code=HTTPStatus.UNPROCESSABLE_ENTITY)
 
 
+def litestar_validation_handler(_: Request, exc: ValidationException) -> Response:
+    errors = []
+    if hasattr(exc, "extra") and exc.extra:
+        for item in exc.extra:
+            if isinstance(item, dict):
+                message = item.get("message", "")
+                field = item.get("key", "")
+                if field:
+                    errors.append(f"{field}: {message}")
+                else:
+                    errors.append(message)
+    if not errors:
+        errors = [str(exc.detail) if hasattr(exc, "detail") else str(exc)]
+    return Response(
+        content={"errors": errors},
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+    )
+
+
 EXCEPTION_HANDLERS: dict = {
     NotFoundError: not_found_handler,
     AlreadyExistsError: already_exists_handler,
@@ -69,4 +89,5 @@ EXCEPTION_HANDLERS: dict = {
     ForbiddenError: forbidden_handler,
     ValidationError: validation_handler,
     ValueError: value_error_handler,
+    ValidationException: litestar_validation_handler,
 }
