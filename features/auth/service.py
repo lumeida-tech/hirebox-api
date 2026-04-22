@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from features.auth.exceptions import (
     InvalidCredentialsError,
+    ExpiredTokenError,
+    InvalidTokenError,
+    InvalidTokenTypeError,
     InactiveAccountError,
     InvalidActivationTokenError,
     UserAlreadyExistsError,
@@ -60,12 +63,12 @@ def _decode_token(token: str, expected_type: str) -> dict:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         if payload.get("type") != expected_type:
-            raise InvalidCredentialsError()
+            raise InvalidTokenTypeError()
         return payload
     except jwt.ExpiredSignatureError:
-        raise InvalidCredentialsError()
+        raise ExpiredTokenError()
     except jwt.InvalidTokenError:
-        raise InvalidCredentialsError()
+        raise InvalidTokenError()
 
 
 def _to_user_response(user: User) -> UserResponse:
